@@ -38,7 +38,7 @@ WORKDIR /app
 COPY --from=builder /app/whatsapp /app/whatsapp
 COPY --from=builder /app/views /app/views
 
-# Copy docs folder containing openapi.yaml (before switching to non-root user)
+# Copy docs folder from build context (host) to container
 COPY docs/ /app/docs/
 
 # Create necessary directories and set permissions
