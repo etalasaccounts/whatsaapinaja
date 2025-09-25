@@ -9,15 +9,14 @@ RUN apk update && apk add --no-cache gcc musl-dev git ca-certificates
 # Set working directory
 WORKDIR /app
 
-# Copy go mod files first for better caching
-COPY go.mod go.sum ./
+# Copy go mod files first for better caching (from src directory)
+COPY src/go.mod src/go.sum ./
 RUN go mod download
 
 # Copy source code
-COPY src/ ./src/
+COPY src/ ./
 
 # Build the application
-WORKDIR /app/src
 RUN CGO_ENABLED=1 GOOS=linux go build -a -ldflags="-w -s" -o /app/whatsapp .
 
 ############################
@@ -37,7 +36,7 @@ WORKDIR /app
 
 # Copy binary from builder stage
 COPY --from=builder /app/whatsapp /app/whatsapp
-COPY --from=builder /app/src/views /app/views
+COPY --from=builder /app/views /app/views
 
 # Create necessary directories and set permissions
 RUN mkdir -p statics/qrcode statics/senditems statics/media storages && \
