@@ -4,12 +4,9 @@ dockerfilePath = "Dockerfile"
 
 [deploy]
 startCommand = "./whatsapp rest --port ${PORT} --basic-auth=${APP_BASIC_AUTH} --debug=true"
-healthcheckPath = "/"
-healthcheckTimeout = 300
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3
 
-[environments.production]
 [environments.production.variables]
 APP_PORT = "${PORT}"
 APP_DEBUG = "true"
@@ -24,6 +21,3 @@ WHATSAPP_WEBHOOK = ""
 WHATSAPP_WEBHOOK_SECRET = "railway-secret-key"
 WHATSAPP_ACCOUNT_VALIDATION = "true"
 WHATSAPP_CHAT_STORAGE = "true"
-
-[environments.production.services.web]
-tcpProxyApplicationPort = "${PORT}"
