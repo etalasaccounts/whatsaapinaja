@@ -38,6 +38,9 @@ WORKDIR /app
 COPY --from=builder /app/whatsapp /app/whatsapp
 COPY --from=builder /app/views /app/views
 
+# Copy docs folder containing openapi.yaml (before switching to non-root user)
+COPY docs/ /app/docs/
+
 # Create necessary directories and set permissions
 RUN mkdir -p statics/qrcode statics/senditems statics/media storages && \
     chown -R appuser:appgroup /app
