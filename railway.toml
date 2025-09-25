@@ -8,6 +8,7 @@ restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3
 
 [environments.production.variables]
+PORT = "${PORT}"
 APP_PORT = "${PORT}"
 APP_DEBUG = "true"
 APP_OS = "Railway"

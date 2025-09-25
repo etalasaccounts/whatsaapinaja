@@ -46,7 +46,7 @@ RUN mkdir -p statics/qrcode statics/senditems statics/media storages && \
 USER appuser
 
 # Expose port (Railway will set this via $PORT)
-EXPOSE 3000
+EXPOSE $PORT
 
 # Default command - Railway will override this with startCommand
 CMD ["./whatsapp", "rest"]

@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/config"
@@ -114,7 +115,17 @@ func restServer(_ *cobra.Command, _ []string) {
 	// Set auto reconnect checking
 	go helpers.SetAutoReconnectChecking(whatsappCli)
 
-	if err := app.Listen(":" + config.AppPort); err != nil {
+	// Use PORT environment variable for Railway deployment, fallback to config.AppPort
+	port := config.AppPort
+	if envPort := os.Getenv("PORT"); envPort != "" {
+		port = envPort
+		logrus.Infof("Using PORT environment variable: %s", port)
+	} else {
+		logrus.Infof("Using default port: %s", port)
+	}
+
+	logrus.Infof("Starting server on port: %s", port)
+	if err := app.Listen(":" + port); err != nil {
 		logrus.Fatalln("Failed to start: ", err.Error())
 	}
 }
