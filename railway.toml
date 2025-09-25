@@ -1,0 +1,29 @@
+[build]
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "./whatsapp rest --port ${PORT} --basic-auth=${APP_BASIC_AUTH} --debug=true"
+healthcheckPath = "/"
+healthcheckTimeout = 300
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
+
+[environments.production]
+[environments.production.variables]
+APP_PORT = "${PORT}"
+APP_DEBUG = "true"
+APP_OS = "Railway"
+APP_BASIC_AUTH = "${APP_BASIC_AUTH}"
+APP_BASE_PATH = ""
+DB_URI = "file:storages/whatsapp.db?_foreign_keys=on"
+DB_KEYS_URI = "file::memory:?cache=shared&_foreign_keys=on"
+WHATSAPP_AUTO_REPLY = ""
+WHATSAPP_AUTO_MARK_READ = "false"
+WHATSAPP_WEBHOOK = ""
+WHATSAPP_WEBHOOK_SECRET = "railway-secret-key"
+WHATSAPP_ACCOUNT_VALIDATION = "true"
+WHATSAPP_CHAT_STORAGE = "true"
+
+[environments.production.services.web]
+tcpProxyApplicationPort = "${PORT}"

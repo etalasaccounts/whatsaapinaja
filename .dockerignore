@@ -1,10 +1,55 @@
-.idea
-.vscode
+# Git
 .git
 .gitignore
+
+# Documentation
+README.md
+readme.md
+docs/
+gallery/
+CLAUDE.md
+LICENCE.txt
+
+# Environment files
 .env
-.env.local
-.env.development
-.env.test
-.env.production
-docker
+.env.example
+
+# IDE and editor files
+.vscode/
+.idea/
+.cursor/
+.claude/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+*.tmp
+*.temp
+
+# Logs
+*.log
+logs/
+
+# Node modules (if any)
+node_modules/
+
+# Build artifacts
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Dependency directories
+vendor/
+
+# Go workspace file
+go.work
+
+# GitHub workflows and templates
+.github/
