@@ -5,7 +5,7 @@
 # Documentation
 README.md
 readme.md
-docs/
+# docs/ - commented out because we need docs/openapi.yaml for API documentation
 gallery/
 CLAUDE.md
 LICENCE.txt
