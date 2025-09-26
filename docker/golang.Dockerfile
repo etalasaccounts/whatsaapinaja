@@ -19,6 +19,8 @@ RUN apk add --no-cache ffmpeg
 WORKDIR /app
 # Copy compiled from builder.
 COPY --from=builder /app/whatsapp /app/whatsapp
+# Copy docs directory containing openapi.yaml
+COPY ./docs /app/docs
 # Run the binary.
 ENTRYPOINT ["/app/whatsapp"]
 

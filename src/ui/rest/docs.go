@@ -93,16 +93,16 @@ func serveRedocDocs(c *fiber.Ctx) error {
 func serveOpenAPISpec(c *fiber.Ctx) error {
 	// Try multiple paths to find the openapi.yaml file
 	possiblePaths := []string{
-		"docs/openapi.yaml",                    // From project root
-		"../docs/openapi.yaml",                 // One level up
-		"../../docs/openapi.yaml",              // Two levels up
-		"/whatsapp/docs/openapi.yaml",          // Docker container path
-		"./docs/openapi.yaml",                  // Current directory
+		"docs/openapi.yaml",       // From project root
+		"/app/docs/openapi.yaml",  // Docker container path
+		"../docs/openapi.yaml",    // One level up from src
+		"../../docs/openapi.yaml", // Two levels up from src/ui
+		"./docs/openapi.yaml",     // Current directory
 	}
-	
+
 	var yamlContent []byte
 	var err error
-	
+
 	for _, yamlPath := range possiblePaths {
 		yamlContent, err = ioutil.ReadFile(yamlPath)
 		if err == nil {
@@ -110,11 +110,11 @@ func serveOpenAPISpec(c *fiber.Ctx) error {
 			break
 		}
 	}
-	
+
 	if err != nil {
 		// If still not found, return error instead of fallback
 		return c.Status(500).JSON(fiber.Map{
-			"error": "OpenAPI specification file not found",
+			"error":       "OpenAPI specification file not found",
 			"paths_tried": possiblePaths,
 		})
 	}
