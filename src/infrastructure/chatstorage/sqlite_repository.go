@@ -763,7 +763,7 @@ func (r *SQLiteRepository) runMigration(migration string, version int) error {
 
 // getMigrations returns all database migrations
 func (r *SQLiteRepository) getMigrations() []string {
-	return []string{
+    return []string{
 		// Migration 1: Initial schema with only chats and messages tables
 		`
 		-- Create chats table
@@ -806,9 +806,23 @@ func (r *SQLiteRepository) getMigrations() []string {
 		CREATE INDEX IF NOT EXISTS idx_chats_name ON chats(name);
 		`,
 
-		// Migration 2: Add index for message ID lookups (performance optimization)
-		`
-		CREATE INDEX IF NOT EXISTS idx_messages_id ON messages(id);
-		`,
-	}
+        // Migration 2: Add index for message ID lookups (performance optimization)
+        `
+        CREATE INDEX IF NOT EXISTS idx_messages_id ON messages(id);
+        `,
+
+        // Migration 3: Add app_users table for SQL-level authentication
+        `
+        CREATE TABLE IF NOT EXISTS app_users (
+            username TEXT PRIMARY KEY,
+            password_hash TEXT NOT NULL,
+            role TEXT DEFAULT 'admin',
+            enabled BOOLEAN DEFAULT TRUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_app_users_enabled ON app_users(enabled);
+        `,
+    }
 }

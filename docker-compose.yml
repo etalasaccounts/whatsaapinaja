@@ -1,4 +1,16 @@
 services:
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=whatsapp
+      - POSTGRES_PASSWORD=whatsapp
+      - POSTGRES_DB=whatsapp
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./storages/postgres:/var/lib/postgresql/data
+
   whatsapp_go:
     logging:
       driver: "json-file"
@@ -11,5 +23,28 @@ services:
     restart: "on-failure"
     ports:
       - "3000:3000"
+    depends_on:
+      - postgres
     env_file:
       - src/.env
+    environment:
+      - DB_URI=postgres://whatsapp:whatsapp@postgres:5432/whatsapp?sslmode=disable
+      - DB_KEYS_URI=postgres://whatsapp:whatsapp@postgres:5432/whatsapp?sslmode=disable
+  adminer:
+    image: adminer:latest
+    restart: always
+    depends_on:
+      - postgres
+    ports:
+      - "8080:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+
+  sqlite_web:
+    image: coleifer/sqlite-web:latest
+    restart: always
+    command: ["sqlite_web", "-H", "0.0.0.0", "-x", "/data/chatstorage.db"]
+    volumes:
+      - ./storages:/data
+    ports:
+      - "8081:8080"
