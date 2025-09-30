@@ -210,27 +210,39 @@ func initFlags() {
 }
 
 func initChatStorage() (*sql.DB, error) {
-	connStr := fmt.Sprintf("%s?_journal_mode=WAL", config.ChatStorageURI)
-	if config.ChatStorageEnableForeignKeys {
-		connStr += "&_foreign_keys=on"
-	}
+    uri := config.ChatStorageURI
+    // Choose driver based on URI prefix
+    if strings.HasPrefix(strings.ToLower(uri), "postgres") {
+        db, err := sql.Open("postgres", uri)
+        if err != nil {
+            return nil, err
+        }
+        db.SetMaxOpenConns(25)
+        db.SetMaxIdleConns(5)
+        if err := db.Ping(); err != nil {
+            db.Close()
+            return nil, fmt.Errorf("failed to ping Postgres chat storage: %w", err)
+        }
+        return db, nil
+    }
 
-	db, err := sql.Open("sqlite3", connStr)
-	if err != nil {
-		return nil, err
-	}
+    // Default to SQLite (file:)
+    connStr := fmt.Sprintf("%s?_journal_mode=WAL", uri)
+    if config.ChatStorageEnableForeignKeys {
+        connStr += "&_foreign_keys=on"
+    }
 
-	// Configure connection pool
-	db.SetMaxOpenConns(25)
-	db.SetMaxIdleConns(5)
-
-	// Test connection
-	if err := db.Ping(); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("failed to ping database: %w", err)
-	}
-
-	return db, nil
+    db, err := sql.Open("sqlite3", connStr)
+    if err != nil {
+        return nil, err
+    }
+    db.SetMaxOpenConns(25)
+    db.SetMaxIdleConns(5)
+    if err := db.Ping(); err != nil {
+        db.Close()
+        return nil, fmt.Errorf("failed to ping SQLite chat storage: %w", err)
+    }
+    return db, nil
 }
 
 func initApp() {
@@ -253,7 +265,12 @@ func initApp() {
 		logrus.Fatalf("failed to initialize chat storage: %v", err)
 	}
 
-	chatStorageRepo = chatstorage.NewStorageRepository(chatStorageDB)
+    // Select repository based on ChatStorageURI
+    if strings.HasPrefix(strings.ToLower(config.ChatStorageURI), "postgres") {
+        chatStorageRepo = chatstorage.NewPostgresRepository(chatStorageDB)
+    } else {
+        chatStorageRepo = chatstorage.NewStorageRepository(chatStorageDB)
+    }
 	chatStorageRepo.InitializeSchema()
 
 	// Seed a default admin user if none exists
