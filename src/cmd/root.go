@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"embed"
 	"fmt"
+	"crypto/rand"
+	"encoding/base64"
 	"go.mau.fi/whatsmeow/store/sqlstore"
 	"os"
 	"strings"
@@ -23,6 +25,7 @@ import (
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/infrastructure/whatsapp"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/pkg/utils"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/usecase"
+	"golang.org/x/crypto/bcrypt"
 	_ "github.com/lib/pq"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/sirupsen/logrus"
@@ -32,15 +35,18 @@ import (
 )
 
 var (
-	EmbedIndex embed.FS
-	EmbedViews embed.FS
+    EmbedIndex embed.FS
+    EmbedViews embed.FS
 
 	// Whatsapp
 	whatsappCli *whatsmeow.Client
 
-	// Chat Storage
-	chatStorageDB   *sql.DB
-	chatStorageRepo domainChatStorage.IChatStorageRepository
+    // Chat Storage
+    chatStorageDB   *sql.DB
+    chatStorageRepo domainChatStorage.IChatStorageRepository
+
+    // Auth (Postgres-backed)
+    authDB *sql.DB
 
 	// Usecase
 	appUsecase        domainApp.IAppUsecase
@@ -204,27 +210,39 @@ func initFlags() {
 }
 
 func initChatStorage() (*sql.DB, error) {
-	connStr := fmt.Sprintf("%s?_journal_mode=WAL", config.ChatStorageURI)
-	if config.ChatStorageEnableForeignKeys {
-		connStr += "&_foreign_keys=on"
-	}
+    uri := config.ChatStorageURI
+    // Choose driver based on URI prefix
+    if strings.HasPrefix(strings.ToLower(uri), "postgres") {
+        db, err := sql.Open("postgres", uri)
+        if err != nil {
+            return nil, err
+        }
+        db.SetMaxOpenConns(25)
+        db.SetMaxIdleConns(5)
+        if err := db.Ping(); err != nil {
+            db.Close()
+            return nil, fmt.Errorf("failed to ping Postgres chat storage: %w", err)
+        }
+        return db, nil
+    }
 
-	db, err := sql.Open("sqlite3", connStr)
-	if err != nil {
-		return nil, err
-	}
+    // Default to SQLite (file:)
+    connStr := fmt.Sprintf("%s?_journal_mode=WAL", uri)
+    if config.ChatStorageEnableForeignKeys {
+        connStr += "&_foreign_keys=on"
+    }
 
-	// Configure connection pool
-	db.SetMaxOpenConns(25)
-	db.SetMaxIdleConns(5)
-
-	// Test connection
-	if err := db.Ping(); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("failed to ping database: %w", err)
-	}
-
-	return db, nil
+    db, err := sql.Open("sqlite3", connStr)
+    if err != nil {
+        return nil, err
+    }
+    db.SetMaxOpenConns(25)
+    db.SetMaxIdleConns(5)
+    if err := db.Ping(); err != nil {
+        db.Close()
+        return nil, fmt.Errorf("failed to ping SQLite chat storage: %w", err)
+    }
+    return db, nil
 }
 
 func initApp() {
@@ -247,8 +265,23 @@ func initApp() {
 		logrus.Fatalf("failed to initialize chat storage: %v", err)
 	}
 
-	chatStorageRepo = chatstorage.NewStorageRepository(chatStorageDB)
+    // Select repository based on ChatStorageURI
+    if strings.HasPrefix(strings.ToLower(config.ChatStorageURI), "postgres") {
+        chatStorageRepo = chatstorage.NewPostgresRepository(chatStorageDB)
+    } else {
+        chatStorageRepo = chatstorage.NewStorageRepository(chatStorageDB)
+    }
 	chatStorageRepo.InitializeSchema()
+
+	// Seed a default admin user if none exists
+	seedDefaultAdmin(chatStorageDB)
+
+    // Initialize Postgres auth DB (use main DB_URI if it's postgres)
+    if db, ok := initAuthDBPostgres(config.DBURI); ok {
+        authDB = db
+        ensurePGAppUsers(authDB)
+        seedDefaultAdminPG(authDB)
+    }
 
 	whatsappDB := whatsapp.InitWaDB(ctx, config.DBURI)
 	var keysDB *sqlstore.Container
@@ -266,6 +299,113 @@ func initApp() {
 	messageUsecase = usecase.NewMessageService(chatStorageRepo)
 	groupUsecase = usecase.NewGroupService()
 	newsletterUsecase = usecase.NewNewsletterService()
+}
+
+// seedDefaultAdmin creates an initial admin user when user table is empty.
+func seedDefaultAdmin(db *sql.DB) {
+    // Ensure app_users table exists (InitializeSchema ran earlier)
+    var count int
+    if err := db.QueryRow("SELECT COUNT(*) FROM app_users").Scan(&count); err != nil {
+        logrus.Warnf("Skipping admin seed, cannot query app_users: %v", err)
+        return
+    }
+    if count > 0 {
+        return
+    }
+
+    // Generate random password
+    pwdBytes := make([]byte, 16)
+    if _, err := rand.Read(pwdBytes); err != nil {
+        logrus.Warnf("Failed to generate admin password: %v", err)
+        return
+    }
+    // URL-safe base64 without padding for readability
+    password := base64.RawURLEncoding.EncodeToString(pwdBytes)
+    hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+    if err != nil {
+        logrus.Warnf("Failed to hash admin password: %v", err)
+        return
+    }
+
+    if _, err := db.Exec(
+        "INSERT INTO app_users (username, password_hash, role, enabled) VALUES (?, ?, 'admin', 1)",
+        "admin", string(hash),
+    ); err != nil {
+        logrus.Warnf("Failed to insert default admin: %v", err)
+        return
+    }
+
+    logrus.Infof("Seeded default admin user for REST Basic Auth -> username: admin, password: %s", password)
+}
+
+// initAuthDBPostgres opens Postgres connection for auth when using postgres URI
+func initAuthDBPostgres(uri string) (*sql.DB, bool) {
+    if !strings.HasPrefix(strings.ToLower(uri), "postgres") {
+        return nil, false
+    }
+    db, err := sql.Open("postgres", uri)
+    if err != nil {
+        logrus.Warnf("Failed to open Postgres auth DB: %v", err)
+        return nil, false
+    }
+    db.SetMaxOpenConns(25)
+    db.SetMaxIdleConns(5)
+    if err := db.Ping(); err != nil {
+        logrus.Warnf("Failed to ping Postgres auth DB: %v", err)
+        _ = db.Close()
+        return nil, false
+    }
+    return db, true
+}
+
+// ensurePGAppUsers creates app_users table in Postgres if missing
+func ensurePGAppUsers(db *sql.DB) {
+    _, err := db.Exec(`
+        CREATE TABLE IF NOT EXISTS app_users (
+            username TEXT PRIMARY KEY,
+            password_hash TEXT NOT NULL,
+            role TEXT DEFAULT 'admin',
+            enabled BOOLEAN DEFAULT TRUE,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_app_users_enabled ON app_users(enabled);
+    `)
+    if err != nil {
+        logrus.Warnf("Failed to ensure app_users in Postgres: %v", err)
+    }
+}
+
+// seedDefaultAdminPG seeds admin user in Postgres auth DB if empty
+func seedDefaultAdminPG(db *sql.DB) {
+    var count int
+    if err := db.QueryRow("SELECT COUNT(*) FROM app_users").Scan(&count); err != nil {
+        logrus.Warnf("Skipping PG admin seed, cannot query app_users: %v", err)
+        return
+    }
+    if count > 0 {
+        return
+    }
+
+    pwdBytes := make([]byte, 16)
+    if _, err := rand.Read(pwdBytes); err != nil {
+        logrus.Warnf("Failed to generate PG admin password: %v", err)
+        return
+    }
+    password := base64.RawURLEncoding.EncodeToString(pwdBytes)
+    hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+    if err != nil {
+        logrus.Warnf("Failed to hash PG admin password: %v", err)
+        return
+    }
+    if _, err := db.Exec(
+        "INSERT INTO app_users (username, password_hash, role, enabled) VALUES ($1, $2, 'admin', TRUE)",
+        "admin", string(hash),
+    ); err != nil {
+        logrus.Warnf("Failed to insert default PG admin: %v", err)
+        return
+    }
+    logrus.Infof("Seeded default admin user (Postgres) -> username: admin, password: %s", password)
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
