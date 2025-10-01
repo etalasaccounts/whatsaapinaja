@@ -64,11 +64,11 @@ func InitWaDB(ctx context.Context, DBURI string) *sqlstore.Container {
 func initDatabase(ctx context.Context, dbLog waLog.Logger, DBURI string) (*sqlstore.Container, error) {
 	if strings.HasPrefix(DBURI, "file:") {
 		return sqlstore.New(ctx, "sqlite3", DBURI, dbLog)
-	} else if strings.HasPrefix(DBURI, "postgres:") {
+	} else if strings.HasPrefix(DBURI, "postgres:") || strings.HasPrefix(DBURI, "postgresql:") {
 		return sqlstore.New(ctx, "postgres", DBURI, dbLog)
 	}
 
-	return nil, fmt.Errorf("unknown database type: %s. Currently only sqlite3(file:) and postgres are supported", DBURI)
+	return nil, fmt.Errorf("unknown database type: %s. Currently only sqlite3(file:) and postgres/postgresql are supported", DBURI)
 }
 
 func syncKeysDevice(ctx context.Context, db, keysDB *sqlstore.Container) {

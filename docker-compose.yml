@@ -3,9 +3,9 @@ services:
     image: postgres:15-alpine
     restart: unless-stopped
     environment:
-      - POSTGRES_USER=whatsapp
-      - POSTGRES_PASSWORD=whatsapp
-      - POSTGRES_DB=whatsapp
+      - POSTGRES_USER=neondb_owner
+      - POSTGRES_PASSWORD=npg_G9CBKQaPmYH5
+      - POSTGRES_DB=ep-summer-flower-a1jqprae
     ports:
       - "5432:5432"
     volumes:
@@ -28,8 +28,8 @@ services:
     env_file:
       - src/.env
     environment:
-      - DB_URI=postgres://whatsapp:whatsapp@postgres:5432/whatsapp?sslmode=disable
-      - DB_KEYS_URI=postgres://whatsapp:whatsapp@postgres:5432/whatsapp?sslmode=disable
+      - DB_URI=postgresql://neondb_owner:npg_G9CBKQaPmYH5@ep-summer-flower-a1jqprae-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+      - DB_KEYS_URI=postgresql://neondb_owner:npg_G9CBKQaPmYH5@ep-summer-flower-a1jqprae-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
   adminer:
     image: adminer:latest
     restart: always
